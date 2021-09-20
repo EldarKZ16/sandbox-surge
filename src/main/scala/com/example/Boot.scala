@@ -26,7 +26,8 @@ object Boot extends App with PlayJsonSupport with BankAccountRequestSerializer {
         path("create") {
           post {
             entity(as[CreateAccountRequest]) { request =>
-              val createdAccountF: Future[Option[BankAccount]] = BankAccountEngine.surgeEngine.aggregateFor(request.accountNumber).sendCommand(request).map {
+              val createAccountCommand = requestToCommand(request)
+              val createdAccountF: Future[Option[BankAccount]] = BankAccountEngine.surgeEngine.aggregateFor(createAccountCommand.accountNumber).sendCommand(createAccountCommand).map {
                 case CommandSuccess(aggregateState) => aggregateState
                 case CommandFailure(reason)         => throw reason
               }
