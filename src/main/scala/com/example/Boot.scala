@@ -1,26 +1,58 @@
 package com.example
 
-import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
+import com.example.Implicits._
+import com.example.account.BankAccount
+import com.example.http.request.CreateAccountRequest
+import com.example.http.serializer.BankAccountRequestSerializer
+import de.heikoseeberger.akkahttpplayjson.PlayJsonSupport
+import org.slf4j.LoggerFactory
+import surge.scaladsl.common.{CommandFailure, CommandSuccess}
+
+import scala.concurrent.Future
 import scala.io.StdIn
 
-object Boot extends App {
+object Boot extends App with PlayJsonSupport with BankAccountRequestSerializer {
 
-  implicit val system = akka.actor.ActorSystem("TheSystem")
+  implicit val system = BankAccountEngine.surgeEngine.actorSystem
   implicit val executionContext = system.dispatcher
+  private val log = LoggerFactory.getLogger(getClass)
 
   val route =
-    path("hello") {
-      get {
-        complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Say hello to akka-http</h1>"))
-      }
+    pathPrefix("bank-accounts") {
+      concat(
+        path("create") {
+          post {
+            entity(as[CreateAccountRequest]) { request =>
+              val createdAccountF: Future[Option[BankAccount]] = BankAccountEngine.surgeEngine.aggregateFor(request.accountNumber).sendCommand(request).map {
+                case CommandSuccess(aggregateState) => aggregateState
+                case CommandFailure(reason)         => throw reason
+              }
+
+              onSuccess(createdAccountF) {
+                case Some(account) => complete(account)
+                case None => complete(StatusCodes.InternalServerError)
+              }
+            }
+          }
+        },
+        path(JavaUUID) { uuid =>
+          get {
+            val accountStateF = BankAccountEngine.surgeEngine.aggregateFor(uuid).getState
+            onSuccess(accountStateF) {
+              case Some(accountState) => complete(accountState)
+              case None => complete(StatusCodes.NotFound)
+            }
+          }
+        }
+      )
     }
 
-  val bindingFuture = Http().newServerAt("localhost", 8080).bind(route)
+  val bindingFuture = Http().newServerAt("0.0.0.0", 8080).bind(route)
 
-  println(s"Server now online. Please navigate to http://localhost:8080/hello\nPress RETURN to stop...")
+  log.info(s"Server is running on http://0.0.0.0:8080/\nPress RETURN to stop...")
   StdIn.readLine() // let it run until user presses return
   bindingFuture
     .flatMap(_.unbind()) // trigger unbinding from the port
