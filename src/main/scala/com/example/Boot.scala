@@ -3,13 +3,13 @@ package com.example
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import com.example.Implicits._
 import com.example.account.BankAccount
 import com.example.http.request.CreateAccountRequest
 import com.example.http.serializer.BankAccountRequestSerializer
 import de.heikoseeberger.akkahttpplayjson.PlayJsonSupport
 import org.slf4j.LoggerFactory
 import surge.scaladsl.common.{CommandFailure, CommandSuccess}
+import com.example.http.request.RequestToCommand._
 
 import scala.concurrent.Future
 import scala.io.StdIn
